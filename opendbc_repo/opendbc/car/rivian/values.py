@@ -65,6 +65,17 @@ class CAR(Platforms):
   )
 
 
+R1S_WHEELBASE = 3.08
+
+
+def set_model_line_specs(CP) -> None:
+  # the R1T and R1S share one platform, the VIN model line (4th character) tells them apart. Set the R1S's shorter
+  # wheelbase on the CarParams every process reads, so paramsd, torqued and controlsd all use the same vehicle model.
+  if CP.carVin[3:4] == ModelLine.R1S and CP.wheelbase > R1S_WHEELBASE:
+    CP.centerToFront *= R1S_WHEELBASE / CP.wheelbase
+    CP.wheelbase = R1S_WHEELBASE
+
+
 def match_fw_to_car_fuzzy(live_fw_versions, vin, offline_fw_versions) -> set[str]:
   # Rivian VIN reference: https://www.rivianforums.com/forum/threads/rivian-vin-decoder.1546
   vin_obj = Vin(vin)

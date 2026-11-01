@@ -4,7 +4,7 @@ import unittest
 from opendbc.car import Bus, structs
 from opendbc.car.rivian.fingerprints import FW_VERSIONS
 from opendbc.car.rivian.interface import CarInterface
-from opendbc.car.rivian.values import CAR, FW_QUERY_CONFIG, WMI, ModelLine, ModelYear
+from opendbc.car.rivian.values import CAR, FW_QUERY_CONFIG, R1S_WHEELBASE, WMI, ModelLine, ModelYear, set_model_line_specs
 
 GearShifter = structs.CarState.GearShifter
 D, R, P = GearShifter.drive, GearShifter.reverse, GearShifter.park
@@ -29,6 +29,39 @@ class TestRivian(unittest.TestCase):
                 matches = FW_QUERY_CONFIG.match_fw_to_car_fuzzy({}, vin, FW_VERSIONS)
                 should_match = year in platform.config.years and not bad
                 assert (matches == {platform}) == should_match, "Bad match"
+
+
+class TestModelLineSpecs(unittest.TestCase):
+  @staticmethod
+  def _params(line):
+    CP = CarInterface.get_non_essential_params(CAR.RIVIAN_R1)
+    vin = ["0"] * 17
+    vin[:3] = WMI.RIVIAN_MPV if line == ModelLine.R1S else WMI.RIVIAN_TRUCK
+    vin[3] = line.value
+    CP.carVin = "".join(vin)
+    return CP
+
+  def test_r1s_gets_the_shorter_wheelbase(self):
+    CP = self._params(ModelLine.R1S)
+    r1t_wheelbase = CP.wheelbase
+    set_model_line_specs(CP)
+    assert abs(CP.wheelbase - R1S_WHEELBASE) < 1e-6  # float32
+    assert abs(CP.centerToFront - R1S_WHEELBASE / 2) < 1e-3, "keeps the front/rear split"
+    shortened = (CP.wheelbase, CP.centerToFront)
+    set_model_line_specs(CP)  # running it again changes nothing
+    assert (CP.wheelbase, CP.centerToFront) == shortened
+    assert r1t_wheelbase > R1S_WHEELBASE
+
+  def test_r1t_and_unknown_vin_keep_the_r1t_wheelbase(self):
+    CP = self._params(ModelLine.R1T)
+    wheelbase, center_to_front = CP.wheelbase, CP.centerToFront
+    set_model_line_specs(CP)
+    assert (CP.wheelbase, CP.centerToFront) == (wheelbase, center_to_front)
+    CP = CarInterface.get_non_essential_params(CAR.RIVIAN_R1)
+    CP.carVin = "0" * 17
+    wheelbase = CP.wheelbase
+    set_model_line_specs(CP)
+    assert CP.wheelbase == wheelbase
 
 
 class TestEngageFeedback(unittest.TestCase):
