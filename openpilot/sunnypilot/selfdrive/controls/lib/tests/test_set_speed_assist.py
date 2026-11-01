@@ -25,7 +25,7 @@ def test_ramps_to_the_personality_cap_under_cruise(on, personality):
   assert run(ssa, 100, a_cruise=0.35, personality=personality) == pytest.approx(0.35 if on else 0.1)  # never above the cruise ramp
 
 
-@pytest.mark.parametrize("kw, at_once", [({"a_e2e": -0.5}, True), ({"a_e2e": -0.15}, True), ({"should_stop": True}, True), ({"v_mph": 15.}, False),
+@pytest.mark.parametrize("kw, at_once", [({"a_e2e": -0.6}, True), ({"a_e2e": -0.15}, False), ({"should_stop": True}, True), ({"v_mph": 15.}, False),
                                          ({"a_cruise": -0.3}, False), ({"curvature": 0.01}, False), ({"enabled": False}, False)])
 def test_backs_off(kw, at_once):
   Params().put_bool("SetSpeedAssist", True)

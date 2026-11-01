@@ -7,7 +7,7 @@ from openpilot.common.realtime import DT_MDL
 MAX_BOOST = (0.7, 0.5, 0.3)  # m/s^2 above the model, by driving personality: aggressive, standard, relaxed
 MIN_SPEED, LEAD_MIN_SPEED = 20 * CV.MPH_TO_MS, 10 * CV.MPH_TO_MS  # a braking lead can take us below MIN_SPEED, see below
 MAX_LAT_ACCEL = 1.0  # m/s^2, off in turns
-MODEL_SLOWING = -0.1  # m/s^2, any model slow-down drops the boost at once
+MODEL_SLOWING, MODEL_BRAKING = -0.1, -0.5  # m/s^2, a model slow-down fades the boost out, braking drops it at once
 RAMP_UP, RAMP_DOWN = 0.5, 1.5  # m/s^3
 GRACE, GRACE_MARGIN, GRACE_JERK = 3., 0.5, 1.2  # s, m/s^2 of extra model braking it rides through, m/s^3, see below
 
@@ -40,9 +40,9 @@ class SetSpeedAssist:
       self.boost = max(self.ramp - a_e2e, 0.)
       return a_e2e + self.boost
 
-    if a_e2e < MODEL_SLOWING or action.shouldStop:
+    if a_e2e < MODEL_BRAKING or action.shouldStop:
       self.boost = 0.
     else:
-      target = float(np.clip(a_cruise - a_e2e, 0., MAX_BOOST[sm['selfdriveState'].personality.raw])) if allowed else 0.
+      target = float(np.clip(a_cruise - a_e2e, 0., MAX_BOOST[sm['selfdriveState'].personality.raw])) if allowed and a_e2e >= MODEL_SLOWING else 0.
       self.boost = float(np.clip(target, self.boost - RAMP_DOWN * DT_MDL, self.boost + RAMP_UP * DT_MDL))
     return a_e2e + self.boost
