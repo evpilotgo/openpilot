@@ -9,7 +9,7 @@ MIN_SPEED = 20 * CV.MPH_TO_MS
 MAX_LAT_ACCEL = 1.0  # m/s^2, off in turns
 MODEL_SLOWING = -0.1  # m/s^2, any model slow-down drops the boost at once
 RAMP_UP, RAMP_DOWN = 0.5, 1.5  # m/s^3
-GRACE = 3.  # s after an engage, see below
+GRACE, GRACE_MARGIN = 3., 0.5  # s after an engage and m/s^2 of extra model braking it rides through, see below
 
 
 class SetSpeedAssist:
@@ -26,12 +26,13 @@ class SetSpeedAssist:
     v, action, engaged = sm['carState'].vEgo, sm['modelV2'].action, sm['selfdriveState'].enabled
     allowed = self.enabled and engaged and not action.shouldStop and v > MIN_SPEED and abs(action.desiredCurvature) * v ** 2 < MAX_LAT_ACCEL
 
-    # Engage grace: the model carries a slowdown that was in progress at an engage forward. For a few seconds the cruise ramp
-    # leads instead, while the model brakes no harder than the truck was then; harder braking or a stop hands back at once.
+    # Engage grace: the model carries a slowdown that was in progress at an engage forward, and deepens it at first. For a few
+    # seconds the cruise ramp leads instead, while the model brakes no harder than the truck was then plus a margin; harder
+    # braking or a stop hands back at once.
     if engaged and not self.engaged:
-      self.grace, self.floor = GRACE, min(a_e2e, sm['carState'].aEgo)
-    self.engaged, self.grace = engaged, self.grace - DT_MDL if allowed and self.floor <= a_e2e < MODEL_SLOWING else 0.
-    if self.grace > 0:  # carried as a boost, so it hands back to the model smoothly once the braking fades out
+      self.grace, self.floor = GRACE, min(a_e2e, sm['carState'].aEgo) - GRACE_MARGIN
+    self.engaged, self.grace = engaged, self.grace - DT_MDL if allowed and a_e2e >= self.floor else 0.
+    if self.grace > 0 and a_e2e < MODEL_SLOWING:  # carried as a boost, so it hands back to the model smoothly once the braking fades out
       self.boost = max(a_cruise - a_e2e, 0.)
       return a_e2e + self.boost
 

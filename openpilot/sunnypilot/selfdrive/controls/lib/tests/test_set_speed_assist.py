@@ -46,10 +46,11 @@ def engaged_ssa():
   return ssa
 
 
-@pytest.mark.parametrize("after", [{"a_e2e": -1.2}, {"should_stop": True}, {"v_mph": 15.}])
+@pytest.mark.parametrize("after", [{"a_e2e": -1.6}, {"should_stop": True}, {"v_mph": 15.}])
 def test_engage_grace_hands_back_at_once(after):
   ssa = engaged_ssa()
   assert run(ssa, 10, **SLOWING) == 0.5  # the cruise ramp leads
+  assert run(ssa, 10, **(SLOWING | {"a_e2e": -1.4})) == 0.5  # also while the model deepens the slowdown a little
   assert run(engaged_ssa(), 1, **SLOWING, v_mph=59.) == 0.5  # also right at the set speed, where it holds the speed
   assert run(ssa, 1, **(SLOWING | after)) == after.get("a_e2e", -0.8)  # harder braking, a stop or low speed
   assert run(ssa, 1, **SLOWING) == -0.8  # and it never re-arms
@@ -62,3 +63,9 @@ def test_engage_grace_ends_after_the_window_and_fades_out_smoothly():
   ssa = engaged_ssa()
   run(ssa, 10, **SLOWING)
   assert min(run(ssa, 1, a_e2e=-0.05, a_cruise=0.5), 0.5) == 0.5  # braking faded out: no step down in the planner's min()
+
+
+def test_engage_grace_holds_a_slowdown_the_model_starts_after_the_engage():
+  ssa = engaged_ssa()
+  assert run(ssa, 1, a_e2e=-0.05, a_cruise=0.5) == pytest.approx(-0.05 + RAMP_UP * DT_MDL)  # not slowing yet: the usual ramp
+  assert run(ssa, 10, a_e2e=-0.4, a_cruise=0.5, a_ego=-0.5) == 0.5
