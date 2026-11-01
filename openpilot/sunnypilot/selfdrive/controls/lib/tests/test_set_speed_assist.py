@@ -12,7 +12,7 @@ def run(ssa, frames, a_e2e=0.1, a_cruise=1.2, v_mph=40., should_stop=False, curv
   sm = {'carState': SimpleNamespace(vEgo=v_mph * CV.MPH_TO_MS, aEgo=a_ego),
         'selfdriveState': SimpleNamespace(enabled=enabled, personality=SimpleNamespace(raw=personality)),
         'modelV2': SimpleNamespace(action=SimpleNamespace(shouldStop=should_stop, desiredCurvature=curvature))}
-  return [ssa.update(sm, a_e2e, a_cruise, 60 * CV.MPH_TO_MS) for _ in range(frames)][-1]
+  return [ssa.update(sm, a_e2e, a_cruise) for _ in range(frames)][-1]
 
 
 @pytest.mark.parametrize("on, personality", [(True, 0), (True, 1), (True, 2), (False, 0)])
@@ -25,7 +25,7 @@ def test_ramps_to_the_personality_cap_under_cruise(on, personality):
 
 
 @pytest.mark.parametrize("kw, at_once", [({"a_e2e": -0.5}, True), ({"a_e2e": -0.15}, True), ({"should_stop": True}, True), ({"v_mph": 15.}, False),
-                                         ({"v_mph": 59.}, False), ({"curvature": 0.01}, False), ({"enabled": False}, False)])
+                                         ({"a_cruise": -0.3}, False), ({"curvature": 0.01}, False), ({"enabled": False}, False)])
 def test_backs_off(kw, at_once):
   Params().put_bool("SetSpeedAssist", True)
   ssa = SetSpeedAssist()
