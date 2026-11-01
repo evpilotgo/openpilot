@@ -5,13 +5,14 @@ import pytest
 from openpilot.common.constants import CV
 from openpilot.common.params import Params
 from openpilot.common.realtime import DT_MDL
-from openpilot.sunnypilot.selfdrive.controls.lib.set_speed_assist import GRACE, MAX_BOOST, RAMP_UP, SetSpeedAssist
+from openpilot.sunnypilot.selfdrive.controls.lib.set_speed_assist import GRACE, GRACE_JERK, MAX_BOOST, RAMP_UP, SetSpeedAssist
 
 
-def run(ssa, frames, a_e2e=0.1, a_cruise=1.2, v_mph=40., should_stop=False, curvature=0., enabled=True, personality=0, a_ego=0.):
+def run(ssa, frames, a_e2e=0.1, a_cruise=1.2, v_mph=40., should_stop=False, curvature=0., enabled=True, personality=0, a_ego=0., lead=False):
   sm = {'carState': SimpleNamespace(vEgo=v_mph * CV.MPH_TO_MS, aEgo=a_ego),
         'selfdriveState': SimpleNamespace(enabled=enabled, personality=SimpleNamespace(raw=personality)),
-        'modelV2': SimpleNamespace(action=SimpleNamespace(shouldStop=should_stop, desiredCurvature=curvature))}
+        'modelV2': SimpleNamespace(action=SimpleNamespace(shouldStop=should_stop, desiredCurvature=curvature)),
+        'radarState': SimpleNamespace(leadOne=SimpleNamespace(present=lead))}
   return [ssa.update(sm, a_e2e, a_cruise) for _ in range(frames)][-1]
 
 
@@ -36,7 +37,7 @@ def test_backs_off(kw, at_once):
 
 
 
-SLOWING = {"a_e2e": -0.8, "a_cruise": 0.5, "a_ego": -1.0}  # the model carries the truck's slowdown past the engage
+SLOWING = {"a_e2e": -0.8, "a_cruise": -0.5, "a_ego": -1.0}  # the model carries the truck's slowdown past the engage
 
 
 def engaged_ssa():
@@ -49,23 +50,30 @@ def engaged_ssa():
 @pytest.mark.parametrize("after", [{"a_e2e": -1.6}, {"should_stop": True}, {"v_mph": 15.}])
 def test_engage_grace_hands_back_at_once(after):
   ssa = engaged_ssa()
-  assert run(ssa, 10, **SLOWING) == 0.5  # the cruise ramp leads
-  assert run(ssa, 10, **(SLOWING | {"a_e2e": -1.4})) == 0.5  # also while the model deepens the slowdown a little
-  assert run(engaged_ssa(), 1, **SLOWING, v_mph=59.) == 0.5  # also right at the set speed, where it holds the speed
+  assert run(ssa, 10, **SLOWING) == -0.5  # a ramp from the truck's accel up to the cruise ramp leads
+  assert run(ssa, 10, **(SLOWING | {"a_e2e": -1.4})) == -0.5  # also while the model deepens the slowdown a little
   assert run(ssa, 1, **(SLOWING | after)) == after.get("a_e2e", -0.8)  # harder braking, a stop or low speed
   assert run(ssa, 1, **SLOWING) == -0.8  # and it never re-arms
 
 
 def test_engage_grace_ends_after_the_window_and_fades_out_smoothly():
   ssa = engaged_ssa()
-  assert run(ssa, int(GRACE / DT_MDL) - 1, **SLOWING) == 0.5
+  assert run(ssa, int(GRACE / DT_MDL) - 1, **SLOWING) == -0.5
   assert run(ssa, 2, **SLOWING) == -0.8
   ssa = engaged_ssa()
   run(ssa, 10, **SLOWING)
-  assert min(run(ssa, 1, a_e2e=-0.05, a_cruise=0.5), 0.5) == 0.5  # braking faded out: no step down in the planner's min()
+  assert run(ssa, 1, a_e2e=-0.05, a_cruise=0.5) > -0.5  # braking faded out: no step down
 
 
 def test_engage_grace_holds_a_slowdown_the_model_starts_after_the_engage():
   ssa = engaged_ssa()
   assert run(ssa, 1, a_e2e=-0.05, a_cruise=0.5) == pytest.approx(-0.05 + RAMP_UP * DT_MDL)  # not slowing yet: the usual ramp
-  assert run(ssa, 10, a_e2e=-0.4, a_cruise=0.5, a_ego=-0.5) == 0.5
+  assert run(ssa, 10, a_e2e=-0.4, a_cruise=0.5, a_ego=-0.5) == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize("a_ego, v_mph, grace", [(-1.0, 15., True), (-1.0, 8., False), (0., 15., False)])
+def test_grace_when_a_lead_we_braked_for_leaves(a_ego, v_mph, grace):
+  ssa = engaged_ssa()
+  run(ssa, 10, a_e2e=-0.9, a_cruise=2.0, a_ego=a_ego, v_mph=v_mph, lead=True)
+  out = run(ssa, 20, a_e2e=-0.6, a_cruise=2.0, a_ego=a_ego, v_mph=v_mph)  # the cruise ramp is far up: ramps from the truck's accel instead
+  assert out == (pytest.approx(a_ego + 20 * GRACE_JERK * DT_MDL) if grace else -0.6)  # below LEAD_MIN_SPEED or not braking: no grace
