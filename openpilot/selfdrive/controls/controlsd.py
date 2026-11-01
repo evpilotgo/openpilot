@@ -40,12 +40,6 @@ class Controls(ControlsExt):
     cloudlog.info("controlsd is waiting for CarParams")
     self.CP = messaging.log_from_bytes(self.params.get("CarParams", block=True), car.CarParams)
     cloudlog.info("controlsd got CarParams")
-    if self.CP.brand == 'rivian' and self.CP.carVin[3:4] == 'S':
-      # the R1T and R1S share one platform, the R1S (VIN model line S) is shorter
-      cp = self.CP.as_builder()
-      cp.centerToFront *= 3.08 / cp.wheelbase
-      cp.wheelbase = 3.08
-      self.CP = cp.as_reader()
 
     # Initialize sunnypilot controlsd extension and base model state
     ControlsExt.__init__(self, self.CP, self.params)
