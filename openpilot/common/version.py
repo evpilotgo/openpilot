@@ -39,6 +39,10 @@ SP_BRANCH_MIGRATIONS = {
   ("mici", "release3-staging"): "release-mici-staging",
 }
 
+# EVPilot moved from gerrylum/openpilot (rx-wb branches) to evpilotgo/openpilot; installs follow on their next update check
+EVPILOT_REMOTE = ("gerrylum/openpilot", "https://github.com/evpilotgo/openpilot.git")
+EVPILOT_BRANCH_MIGRATIONS = {"rx-wb": "rel", "rx-wb-stg": "stg", "rx-wb-dev": "dev", "tq-wb": "torque"}
+
 BUILD_METADATA_FILENAME = "build.json"
 
 training_version: str = "0.2.0"
