@@ -30,6 +30,7 @@ from openpilot.system.hardware.fan_controller import FanController
 from openpilot.system.hardware.chestnut.monitoring import chestnut_state_thread
 from openpilot.system.hardware.chestnut.status import ChestnutStatus
 from openpilot.common.version import terms_version, training_version, get_build_metadata, terms_version_sp
+from openpilot import jetlink_adapter
 
 ThermalStatus = log.DeviceState.ThermalStatus
 NetworkType = log.DeviceState.NetworkType
@@ -39,6 +40,7 @@ TEMP_TAU = 5.   # 5s time constant
 DISCONNECT_TIMEOUT = 5.  # wait 5 seconds before going offroad after disconnect so you get an alert
 PANDA_STATES_TIMEOUT = round(1000 / SERVICE_LIST['pandaStates'].frequency * 1.5)  # 1.5x the expected pandaState frequency
 ONROAD_CYCLE_TIME = 1  # seconds to wait offroad after requesting an onroad cycle
+JETLINK_SHUTDOWN_CAP_S = 30.  # Jetlink's 25 s SHUTDOWN_TIMEOUT plus 5 s, written out so it holds without Jetlink
 
 class Chestnut:
   # flash before going onroad, modeld ignores chestnut until the product string matches
@@ -217,6 +219,8 @@ def hardware_thread(end_event, hw_queue) -> None:
   off_ts: float | None = None
   started_ts: float | None = None
   started_seen = False
+  shutdown_since = None  # when shutting down started, while a Jetlink host powers off first
+  HOOKS = jetlink_adapter.hooks()
   startup_blocked_ts: float | None = None
   thermal_status = ThermalStatus.ok
 
@@ -360,6 +364,7 @@ def hardware_thread(end_event, hw_queue) -> None:
     # with 2% left, we killall, otherwise the phone will take a long time to boot
     startup_conditions["free_space"] = msg.deviceState.freeSpacePercent > 2
     startup_conditions["completed_training"] = params.get("CompletedTrainingVersion") == training_version
+    startup_conditions["not_powering_off"] = shutdown_since is None
     startup_conditions["not_driver_view"] = not params.get_bool("IsDriverViewEnabled")
 
     # must be at an engageable thermal band to go onroad
@@ -458,10 +463,17 @@ def hardware_thread(end_event, hw_queue) -> None:
     statlog.sample("som_power_draw", som_power_draw)
     msg.deviceState.somPowerDrawW = som_power_draw
 
-    # Check if we need to shut down
-    if power_monitor.should_shutdown(onroad_conditions["ignition"], in_car, off_ts, started_seen):
+    # Check if we need to shut down. An always-on Jetlink host is asked to power off with the comma (on DoShutdown
+    # only, never a reboot), capped so a host that never answers can't hold the shutdown
+    should_shutdown = power_monitor.should_shutdown(onroad_conditions["ignition"], in_car, off_ts, started_seen)
+    shutdown_since = (shutdown_since or time.monotonic()) if should_shutdown else None  # the cap restarts if the car wakes first
+    capped = shutdown_since is not None and time.monotonic() - shutdown_since > JETLINK_SHUTDOWN_CAP_S
+    if HOOKS.shutdown_step(should_shutdown, f"offroad since {off_ts}") or capped:
       cloudlog.warning(f"shutting device down, offroad since {off_ts}")
       params.put_bool("DoShutdown", True, block=True)
+
+    reason = HOOKS.reason()  # why the link the user turned on can't run; None with it off
+    set_offroad_alert_if_changed("Offroad_JetlinkUnavailable", reason is not None, extra_text=reason)
 
     msg.deviceState.started = started_ts is not None and not offroad_mode
     msg.deviceState.startedMonoTime = int(1e9*(started_ts or 0))

@@ -261,4 +261,13 @@ EVENTS_SP: dict[int, dict[str, Alert | AlertCallbackType]] = {
   EventNameSP.belowMadsMinEngageSpeed: {
     ET.NO_ENTRY: EmptyAlert,
   },
+
+  # Jetlink: the big model on the computer over USB fell off while in control, the small model drives on
+  EventNameSP.jetlinkLost: {
+    ET.WARNING: Alert(
+      "TAKE CONTROL",
+      "Big model link lost, small model driving",
+      AlertStatus.userPrompt, AlertSize.mid,
+      Priority.MID, VisualAlert.steerRequired, AudibleAlert.prompt, 3.),
+  },
 }

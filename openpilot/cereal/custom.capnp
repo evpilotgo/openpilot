@@ -361,6 +361,7 @@ struct OnroadEventSP @0xda96579883444c35 {
     laneChangeRoadEdge @24;
     bigModelReady @25;
     belowMadsMinEngageSpeed @26;
+    jetlinkLost @27;
   }
 }
 

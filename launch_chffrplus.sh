@@ -81,6 +81,9 @@ function launch {
   ln -sfn rednose_repo/rednose rednose
   ln -sfn teleoprtc_repo/teleoprtc teleoprtc
   ln -sfn tinygrad_repo/tinygrad tinygrad
+  ln -sfn jetlink_repo/jetlink jetlink
+  # Jetlink: no current drawn from the USB-C port while the link is on, so the comma never runs off the host's port
+  [ -f /AGNOS ] && sudo -n bash jetlink/comma/jetlink-root.sh boot /data/params/d/JetlinkLink &
 
   # hardware specific init
   if [ -f /AGNOS ]; then
