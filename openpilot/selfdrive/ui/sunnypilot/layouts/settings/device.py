@@ -17,6 +17,7 @@ from openpilot.system.ui.widgets.button import ButtonStyle
 from openpilot.system.ui.widgets.confirm_dialog import alert_dialog, ConfirmDialog
 from openpilot.system.ui.widgets.list_view import text_item
 from openpilot.system.ui.widgets.scroller_tici import LineSeparator
+from openpilot import jetlink_adapter
 
 offroad_time_options = {
   0: 0,
@@ -78,6 +79,16 @@ class DeviceLayoutSP(DeviceLayout):
       inline=True,
     )
 
+    self._jetlink = multiple_button_item_sp(
+      title=lambda: tr("Jetlink (Experimental)"),
+      description=self._jetlink_description,
+      param="JetlinkLink",
+      buttons=[lambda: tr("Off"), lambda: tr("USB"), lambda: tr("iPhone")],
+      button_width=255,
+      callback=None,
+      inline=True,
+    )
+
     self._quiet_mode_and_dcam = dual_button_item_sp(
       left_text=lambda: tr("Quiet Mode"),
       right_text=lambda: tr("Driver Camera Preview"),
@@ -122,6 +133,8 @@ class DeviceLayoutSP(DeviceLayout):
       self._device_wake_mode,
       LineSeparator(),
       self._max_time_offroad,
+      LineSeparator(),
+      self._jetlink,
       LineSeparator(height=10),
       self._quiet_mode_and_dcam,
       self._reg_and_training,
@@ -186,6 +199,15 @@ class DeviceLayoutSP(DeviceLayout):
     label += tr(" (Default)") if value == 1800 else ""
     return label
 
+  @staticmethod
+  def _jetlink_description() -> str:
+    text = tr("Runs the big driving model on a Jetson, Mac, Linux PC, Android phone (USB) or iPhone/iPad plugged into the " +
+              "comma's USB-C port with a USB 3 cable. Power the comma from the car, not that port. If the link drops while " +
+              "engaged, the comma says TAKE CONTROL and keeps driving on the small model.")
+    status = jetlink_adapter.hooks().status()
+    line = (status.progress or {}).get('msg') if status is not None and status.shown else None
+    return f"{text}\n\n{tr('Status')}: {line or status.phase}" if status is not None and status.shown else text
+
   def _update_state(self):
     super()._update_state()
 
@@ -216,6 +238,7 @@ class DeviceLayoutSP(DeviceLayout):
 
     # Offroad only buttons
     self._quiet_mode_and_dcam.action_item.right_button.set_enabled(ui_state.is_offroad())
+    self._jetlink.action_item.set_enabled(ui_state.is_offroad())
     self._reg_and_training.action_item.left_button.set_enabled(ui_state.is_offroad())
     self._reg_and_training.action_item.right_button.set_enabled(ui_state.is_offroad())
     self._onroad_uploads_and_reset_settings.action_item.right_button.set_enabled(ui_state.is_offroad())

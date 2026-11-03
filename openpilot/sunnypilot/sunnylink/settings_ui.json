@@ -1732,6 +1732,31 @@
               ]
             },
             {
+              "key": "JetlinkLink",
+              "widget": "multiple_button",
+              "title": "Jetlink (Experimental)",
+              "description": "Runs the big driving model on a Jetson, Mac, Linux PC, Android phone (USB) or iPhone/iPad plugged into the comma's USB-C port with a USB 3 cable. Power the comma from the car, not that port. If the link drops while engaged, the comma says TAKE CONTROL and keeps driving on the small model.",
+              "options": [
+                {
+                  "value": 0,
+                  "label": "Off"
+                },
+                {
+                  "value": 1,
+                  "label": "USB"
+                },
+                {
+                  "value": 2,
+                  "label": "iPhone"
+                }
+              ],
+              "enablement": [
+                {
+                  "type": "offroad_only"
+                }
+              ]
+            },
+            {
               "key": "QuietMode",
               "widget": "toggle",
               "title": "Quiet Mode"
