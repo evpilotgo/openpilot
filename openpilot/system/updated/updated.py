@@ -17,7 +17,7 @@ from openpilot.common.markdown import parse_markdown
 from openpilot.common.swaglog import cloudlog
 from openpilot.selfdrive.selfdrived.alertmanager import set_offroad_alert
 from openpilot.common.hardware import AGNOS, HARDWARE
-from openpilot.common.version import get_build_metadata, SP_BRANCH_MIGRATIONS
+from openpilot.common.version import get_build_metadata, SP_BRANCH_MIGRATIONS, EVPILOT_REMOTE, EVPILOT_BRANCH_MIGRATIONS
 
 LOCK_FILE = os.getenv("UPDATER_LOCK_FILE", "/tmp/safe_staging_overlay.lock")
 STAGING_ROOT = os.getenv("UPDATER_STAGING_ROOT", "/data/safe_staging")
@@ -331,6 +331,10 @@ class Updater:
     cloudlog.info("checking for updates")
 
     excluded_branches = ('release2', 'release2-staging')
+
+    if EVPILOT_REMOTE[0] in run(["git", "remote", "get-url", "origin"], OVERLAY_MERGED):
+      run(["git", "remote", "set-url", "origin", EVPILOT_REMOTE[1]], OVERLAY_MERGED)
+      self.params.put("UpdaterTargetBranch", EVPILOT_BRANCH_MIGRATIONS.get(self.target_branch, self.target_branch), block=True)
 
     try:
       run(["git", "ls-remote", "origin", "HEAD"], OVERLAY_MERGED)
