@@ -13,7 +13,7 @@ from openpilot.common.swaglog import cloudlog
 from opendbc.car.car_helpers import interfaces
 from opendbc.car.vehicle_model import VehicleModel
 from openpilot.selfdrive.controls.lib.drive_helpers import clip_curvature
-from openpilot.selfdrive.controls.lib.lane_guard import STOCK, TUNES, LaneGuard
+from openpilot.selfdrive.controls.lib.lane_guard import STOCK, TUNES, LaneGuard, fill_lane_guard_state
 from openpilot.selfdrive.controls.lib.latcontrol import LatControl
 from openpilot.selfdrive.controls.lib.latcontrol_pid import LatControlPID
 from openpilot.selfdrive.controls.lib.latcontrol_angle import LatControlAngle, STEER_ANGLE_SATURATION_THRESHOLD
@@ -159,8 +159,9 @@ class Controls(ControlsExt):
     # Reset desired curvature to current to avoid violating the limits on engage
     if self.sm.frame % int(1. / DT_CTRL) == 0:
       self.update_params_1hz()
-    lane_guard_curvature = self.lane_guard.update(CS.vEgo, model_v2, self.lane_guard_enabled and CC.latActive and not CS.steeringPressed,
-                                                  CS.leftBlinker or CS.rightBlinker, self.left_hand_traffic)
+    lane_guard_curvature = self.lane_guard.update(CS.vEgo, model_v2, self.lane_guard_enabled and CC.latActive,
+                                                  CS.leftBlinker or CS.rightBlinker, self.left_hand_traffic,
+                                                  driver_steering=CS.steeringPressed)
     if self.sm.valid['lateralManeuverPlan']:
       new_desired_curvature = self.sm['lateralManeuverPlan'].desiredCurvature if CC.latActive else self.curvature
     else:
@@ -284,6 +285,11 @@ class Controls(ControlsExt):
     cc_send.valid = CS.canValid
     cc_send.carControl = CC
     self.pm.send('carControl', cc_send)
+
+  def state_control_ext(self, sm):
+    CC_SP = super().state_control_ext(sm)
+    fill_lane_guard_state(CC_SP.laneGuard, self.lane_guard_enabled, self.lane_guard.status)
+    return CC_SP
 
   def run(self):
     rk = Ratekeeper(100, print_delay_threshold=None)

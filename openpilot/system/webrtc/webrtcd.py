@@ -19,6 +19,7 @@ from urllib.parse import urlparse, parse_qs
 from typing import Any
 
 from openpilot.system.webrtc import opview_slim
+from openpilot.system.webrtc.opview_nav import nav_destination, set_nav_destination
 from openpilot.system.webrtc.helpers import StreamRequestBody
 from openpilot.system.webrtc.schema import generate_field
 from openpilot.common.params import Params
@@ -112,8 +113,10 @@ class CerealOutgoingMessageProxy(AsyncTaskRunner):
       self._car = {"CarBrand": cp.brand, "CarFlags": cp.flags}
     return {
       **(self._car or {"CarBrand": "", "CarFlags": 0}),
-      **{k: self.params.get_bool(k) for k in ("IsMetric", "RoadNameToggle", "TrueVEgoUI", "ShowTurnSignals", "BlindSpot")},
+      **{k: self.params.get_bool(k) for k in ("IsMetric", "RoadNameToggle", "TrueVEgoUI", "ShowTurnSignals", "BlindSpot",
+                                              "LaneGuardEnabled", "NavigationEnabled")},
       "SpeedLimitMode": int(self.params.get("SpeedLimitMode", return_default=True) or 0),
+      "NavDestination": nav_destination(self.params),  # {latitude, longitude} or None
     }
 
   def update(self):
@@ -337,6 +340,12 @@ class StreamSession:
               "action": "pong", "browserSendTime": payload["data"]["browserSendTime"], "deviceTime": time.time() * 1000, # noqa: TID251
             }})
             self.stream.get_messaging_channel().send(pong)
+          case "navDestination":
+            # opview only, and nothing else from the app is written to the comma's params
+            if self.opview:
+              error = set_nav_destination(self.params, payload.get("data"))
+              reply = json.dumps({"type": "navDestinationResult", "data": {"ok": error is None, "error": error}})
+              self.stream.get_messaging_channel().send(reply)
           case "enableTimingSei":
             for track in self.video_tracks:
               track.timing_sei_enabled = bool(payload["data"]["enabled"])

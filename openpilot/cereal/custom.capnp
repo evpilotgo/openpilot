@@ -390,6 +390,35 @@ struct CarControlSP @0xa5cd762cd951a455 {
   leadOne @2 :LeadData;
   leadTwo @3 :LeadData;
   intelligentCruiseButtonManagement @4 :IntelligentCruiseButtonManagement;
+  laneGuard @5 :LaneGuardState;
+
+  # EVPilot lane guard (selfdrive/controls/lib/lane_guard.py), for the opview app
+  struct LaneGuardState {
+    enabled @0 :Bool;           # the LaneGuardEnabled setting
+    active @1 :Bool;            # guarding: openpilot steering, the driver not, above 8 m/s
+    pausedReason @2 :PausedReason;  # openpilot steers but lane guard does not (laneChange: only the road edges are guarded)
+    curvature @3 :Float32;      # 1/m added to the model's desired curvature, positive pushes right (away from the left)
+    source @4 :Source;          # what the push is away from
+    leftLineGuarded @5 :Bool;
+    rightLineGuarded @6 :Bool;
+    leftEdgeGuarded @7 :Bool;
+    rightEdgeGuarded @8 :Bool;
+    leftGap @9 :Float32;        # m, body to the nearest guarded line or edge, negative is over it, 0 when nothing is guarded
+    rightGap @10 :Float32;
+
+    enum PausedReason {
+      none @0;
+      driverSteering @1;
+      laneChange @2;   # the blinker, a lane change, or the second after one
+      slow @3;
+    }
+
+    enum Source {
+      none @0;
+      laneLine @1;
+      roadEdge @2;
+    }
+  }
 
   struct Param {
     key @0 :Text;
