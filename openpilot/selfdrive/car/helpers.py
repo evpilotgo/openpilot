@@ -54,7 +54,11 @@ def convert_carControlSP(struct: capnp.lib.capnp._DynamicStructReader) -> struct
     return {k: v for k, v in s.items() if not k.endswith('DEPRECATED')}
 
   struct_dict = struct.to_dict()
-  struct_dataclass = structs.CarControlSP(**remove_deprecated({k: v for k, v in struct_dict.items() if not isinstance(k, dict)}))
+  # only what the car ports know: carControlSP also carries things for the UI (laneGuard, for opview), and an
+  # unknown key here raised in card on every frame, so no CAN went out
+  known = getattr(structs.CarControlSP, _FIELDS)
+  struct_dataclass = structs.CarControlSP(**remove_deprecated({k: v for k, v in struct_dict.items()
+                                                               if k in known and not isinstance(k, dict)}))
 
   struct_dataclass.mads = structs.ModularAssistiveDrivingSystem(**remove_deprecated(struct_dict.get('mads', {})))
   # struct_dataclass.params = [structs.CarControlSP.Param(**remove_deprecated(p)) for p in struct_dict.get('params', [])]
