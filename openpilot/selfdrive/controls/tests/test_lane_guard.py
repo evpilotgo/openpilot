@@ -2,7 +2,9 @@ import numpy as np
 
 from openpilot.cereal import log
 from openpilot.common.test import OpenpilotTestCase
-from openpilot.selfdrive.controls.lib.lane_guard import LANE_CHANGE_COOLDOWN, STOCK, TUNES, LaneGuard, Tune
+from openpilot.cereal import custom
+from openpilot.selfdrive.controls.lib.lane_guard import EDGE, LANE_CHANGE_COOLDOWN, LINE, PAUSED_DRIVER, PAUSED_LANE_CHANGE, \
+  PAUSED_NONE, PAUSED_SLOW, STOCK, TUNES, LaneGuard, Tune, fill_lane_guard_state
 from openpilot.selfdrive.controls.lib.ldw import CAMERA_OFFSET
 from openpilot.selfdrive.modeld.constants import ModelConstants
 
@@ -207,3 +209,74 @@ class TestLaneGuard(OpenpilotTestCase):
     # 30 cm clear: leaves it alone
     car_y = 1.4 - RIVIAN.half_width - 0.30
     assert settle(LaneGuard(RIVIAN), make_model(car_y, lane_width=2.8, curve=0.0)) == 0.0
+
+
+class TestLaneGuardStatus(OpenpilotTestCase):
+  # what the opview app is told: carControlSP.laneGuard
+
+  def test_armed_when_centered(self):
+    guard = LaneGuard()
+    settle(guard, make_model(lane_width=2.6))
+    st = guard.status
+    assert st.active and st.paused == PAUSED_NONE and st.curvature == 0.0 and st.info.source is None
+    assert st.info.left_line and st.info.right_line and st.info.left_edge and st.info.right_edge
+    # centred in a 2.6 m lane: the same gap each side, the body to each line
+    assert abs(st.info.left_gap - st.info.right_gap) < 0.01
+    assert abs(st.info.left_gap - (1.3 - CAR_HALF_WIDTH)) < 0.01
+
+  def test_pushing_away_from_a_line(self):
+    guard = LaneGuard()
+    settle(guard, make_model(-(1.3 - CAR_HALF_WIDTH + 0.05), lane_width=2.6))
+    st = guard.status
+    assert st.curvature > 0.0 and st.info.source == LINE  # away from the left line, to the right
+    assert st.info.left_gap < 0.0  # over it
+
+  def test_pushing_away_from_a_road_edge(self):
+    # an unmarked road: no lines, the right road edge close
+    guard = LaneGuard()
+    settle(guard, make_model(1.3 - CAR_HALF_WIDTH + 0.05, lane_width=2.6, edge=0.1, left_prob=0.3, right_prob=0.3))
+    st = guard.status
+    assert st.curvature < 0.0 and st.info.source == EDGE
+    assert not st.info.left_line and not st.info.right_line and st.info.right_edge
+
+  def test_source_kept_while_the_push_ramps_out(self):
+    guard = LaneGuard(RIVIAN)
+    settle(guard, make_model(-(1.3 - RIVIAN.half_width + 0.05), lane_width=2.6))
+    guard.update(V_EGO, make_model(lane_width=2.6), True)
+    assert guard.status.curvature > 0.0 and guard.status.info.source == LINE
+    settle(guard, make_model(lane_width=2.6), steps=1000)
+    assert guard.status.curvature == 0.0 and guard.status.info.source is None
+
+  def test_paused_reasons(self):
+    md = make_model(lane_width=2.6)
+    guard = LaneGuard()
+    guard.update(V_EGO, md, True, driver_steering=True)
+    assert not guard.status.active and guard.status.paused == PAUSED_DRIVER
+    guard.update(V_EGO, md, True, blinker=True)
+    assert guard.status.active and guard.status.paused == PAUSED_LANE_CHANGE
+    assert not guard.status.info.left_line and guard.status.info.left_edge  # only the road edges
+    guard = LaneGuard()
+    guard.update(5.0, md, True)
+    assert not guard.status.active and guard.status.paused == PAUSED_SLOW
+    guard.update(V_EGO, md, False)  # openpilot not steering: nothing to say
+    assert not guard.status.active and guard.status.paused == PAUSED_NONE
+
+  def test_driver_steering_stops_the_push_like_inactive(self):
+    md = make_model(-(1.3 - CAR_HALF_WIDTH + 0.05), lane_width=2.6)
+    guard = LaneGuard()
+    settle(guard, md)
+    assert settle(guard, md, steps=500) > 0.0
+    for _ in range(500):
+      c = guard.update(V_EGO, md, True, driver_steering=True)
+    assert c == 0.0
+
+  def test_fills_the_message(self):
+    guard = LaneGuard()
+    settle(guard, make_model(-(1.3 - CAR_HALF_WIDTH + 0.05), lane_width=2.6))
+    cc = custom.CarControlSP.new_message()
+    fill_lane_guard_state(cc.laneGuard, True, guard.status)
+    lg = cc.laneGuard
+    assert lg.enabled and lg.active and str(lg.pausedReason) == "none" and str(lg.source) == "laneLine"
+    assert lg.curvature > 0.0 and lg.leftLineGuarded and lg.rightEdgeGuarded and lg.leftGap < 0.0
+    fill_lane_guard_state(cc.laneGuard, False, LaneGuard().status)
+    assert not cc.laneGuard.enabled and str(cc.laneGuard.source) == "none"
