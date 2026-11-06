@@ -29,6 +29,18 @@ def test_keeps_only_listed_fields_and_rounds():
   assert "steeringPressed" not in out
 
 
+def test_torque_bar_inputs_keep_their_precision():
+  def build(cs):
+    cs.curvature = 0.000351234
+    cs.desiredCurvature = -0.000412345
+    cs.lateralControlState.init("angleState")
+  out = opview_slim.slim("controlsState", _reader("controlsState", build))
+  # 3 places would make both 0
+  assert out["curvature"] == 0.000351 and out["desiredCurvature"] == -0.000412
+  out = opview_slim.slim("vehicleParameters", _reader("vehicleParameters", lambda vp: setattr(vp, "roll", 0.0261799)))
+  assert out == {"roll": 0.02618}
+
+
 def test_union_lists_and_model():
   out = opview_slim.slim("controlsState", _reader("controlsState", lambda cs: cs.lateralControlState.init("torqueState")))
   assert out["lateralControlState"] == {"torqueState": {"saturated": False}}
