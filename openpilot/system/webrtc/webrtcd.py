@@ -110,7 +110,8 @@ class CerealOutgoingMessageProxy(AsyncTaskRunner):
   def _opview_params(self) -> dict[str, Any]:
     if self._car is None and (cp_bytes := self.params.get("CarParamsPersistent")):  # carParams is only published every ~50 s
       cp = messaging.log_from_bytes(cp_bytes, car.CarParams)
-      self._car = {"CarBrand": cp.brand, "CarFlags": cp.flags}
+      # maxLateralAccel: full scale of the torque bar, as on the comma
+      self._car = {"CarBrand": cp.brand, "CarFlags": cp.flags, "CarMaxLateralAccel": round(cp.maxLateralAccel, 3)}
     return {
       **(self._car or {"CarBrand": "", "CarFlags": 0}),
       **{k: self.params.get_bool(k) for k in ("IsMetric", "RoadNameToggle", "TrueVEgoUI", "ShowTurnSignals", "BlindSpot",

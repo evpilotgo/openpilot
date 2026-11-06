@@ -40,7 +40,9 @@ OPVIEW_FIELDS: dict[str, dict] = {
     "alertText1": True, "alertText2": True, "alertSize": True, "alertStatus": True,
   },
   "controlsState": {
-    "curvature": True, "desiredCurvature": True,
+    # curvatures are 1e-4 to 1e-2 1/m: 3 places rounded a highway curve to nothing and steps the torque bar in jumps
+    # of 0.001 1/m (0.9 m/s² at 30 m/s)
+    "curvature": 6, "desiredCurvature": 6,
     "lateralControlState": {UNION: {"saturated": True}},
   },
   "radarState": {"leadOne": _LEAD, "leadTwo": _LEAD},
@@ -72,6 +74,8 @@ OPVIEW_FIELDS: dict[str, dict] = {
     "leftLineGuarded": True, "rightLineGuarded": True, "leftEdgeGuarded": True, "rightEdgeGuarded": True,
     "leftGap": True, "rightGap": True,
   }},
+  # torque bar: the road's roll, taken out of the estimated steering effort as the comma's own bar does
+  "vehicleParameters": {"roll": 5},
   # Navigate: where the truck is, and navd's route and next turn
   "gpsLocationExternal": _GPS,
   "gpsLocation": _GPS,
@@ -91,7 +95,7 @@ OPVIEW_RATES_HZ: dict[str, float] = {
   "longitudinalPlan": 5., "longitudinalPlanSP": 5.,
   "liveMapDataSP": 2., "deviceState": 2., "extrinsicsCalibration": 2.,
   "narrowRoadCameraState": 1.,
-  "carControlSP": 10., "gpsLocationExternal": 5., "gpsLocation": 5., "navInstruction": 2.,
+  "carControlSP": 10., "vehicleParameters": 10., "gpsLocationExternal": 5., "gpsLocation": 5., "navInstruction": 2.,
   "navRoute": 5.,  # navd sends it when it changes and every 10 s, all of them go through
 }
 
