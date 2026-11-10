@@ -33,7 +33,7 @@ sections:
   - key: SetSpeedAssist
     widget: toggle
     title: Set Speed Assist
-    description: Above 20 mph, lets the car speed up toward the set speed when only the driving model holds it back.
+    description: Lets the car speed up toward the set speed when only the driving model holds it back. Works above 20 mph, or above 10 mph right after a car you were slowing for moves away.
     enablement:
     - $ref: '#/macros/longitudinal'
   - key: IntelligentCruiseButtonManagement
