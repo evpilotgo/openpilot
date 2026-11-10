@@ -59,7 +59,7 @@ class CruiseLayout(Widget):
 
     self.ssa_toggle = toggle_item_sp(
       title=tr("Set Speed Assist"),
-      description=tr("Above 20 mph, lets the car speed up toward the set speed when only the driving model holds it back."),
+      description=tr("Lets the car speed up toward the set speed when only the driving model holds it back. Works above 20 mph, or above 10 mph right after a car you were slowing for moves away."),
       param="SetSpeedAssist")
 
     self.custom_acc_toggle = toggle_item_sp(
