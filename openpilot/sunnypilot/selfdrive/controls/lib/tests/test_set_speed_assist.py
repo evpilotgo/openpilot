@@ -5,7 +5,7 @@ import pytest
 from openpilot.common.constants import CV
 from openpilot.common.params import Params
 from openpilot.common.realtime import DT_MDL
-from openpilot.sunnypilot.selfdrive.controls.lib.set_speed_assist import GRACE, GRACE_JERK, MAX_BOOST, RAMP_UP, SetSpeedAssist
+from openpilot.sunnypilot.selfdrive.controls.lib.set_speed_assist import GRACE, GRACE_JERK, MAX_BOOST, RAMP_DOWN, RAMP_UP, SetSpeedAssist
 
 
 def run(ssa, frames, a_e2e=0.1, a_cruise=1.2, v_mph=40., should_stop=False, curvature=0., enabled=True, personality=0, a_ego=0., lead=False):
@@ -25,7 +25,7 @@ def test_ramps_to_the_personality_cap_under_cruise(on, personality):
   assert run(ssa, 100, a_cruise=0.35, personality=personality) == pytest.approx(0.35 if on else 0.1)  # never above the cruise ramp
 
 
-@pytest.mark.parametrize("kw, at_once", [({"a_e2e": -0.6}, True), ({"a_e2e": -0.15}, False), ({"should_stop": True}, True), ({"v_mph": 15.}, False),
+@pytest.mark.parametrize("kw, at_once", [({"a_e2e": -0.6}, True), ({"a_e2e": -0.5}, False), ({"should_stop": True}, True), ({"v_mph": 15.}, False),
                                          ({"a_cruise": -0.3}, False), ({"curvature": 0.01}, False), ({"enabled": False}, False)])
 def test_backs_off(kw, at_once):
   Params().put_bool("SetSpeedAssist", True)
@@ -35,6 +35,40 @@ def test_backs_off(kw, at_once):
   assert (run(ssa, 1, **kw) == pytest.approx(a_e2e)) == at_once
   assert run(ssa, 100, **kw) == pytest.approx(a_e2e)
 
+
+@pytest.mark.parametrize("a_e2e, share", [(0.1, 1.), (-0.1, 1.), (-0.2, 0.75), (-0.3, 0.5), (-0.4, 0.25)])
+def test_a_model_slow_down_shrinks_the_cap_in_proportion(a_e2e, share):
+  Params().put_bool("SetSpeedAssist", True)
+  ssa = SetSpeedAssist()
+  assert run(ssa, 100, a_e2e=a_e2e, a_cruise=2.0) == pytest.approx(a_e2e + MAX_BOOST[0] * share)
+
+
+def test_the_model_drifting_past_minus_0_1_trims_the_boost_without_a_drop():
+  Params().put_bool("SetSpeedAssist", True)
+  ssa = SetSpeedAssist()
+  run(ssa, 100, a_e2e=0.1, a_cruise=2.0)
+  boosts = []
+  for a_e2e in [0.1 - 0.01 * i for i in range(31)]:  # the model eases from +0.1 to -0.2 over 1.5 s, as on route 86a69c7afc58c683/28
+    run(ssa, 1, a_e2e=a_e2e, a_cruise=2.0)
+    boosts.append(ssa.boost)
+  assert boosts[-1] == pytest.approx(MAX_BOOST[0] * 0.75)  # the old gate had it at 0 here
+  assert all(b - a > -RAMP_DOWN * DT_MDL / 2 for b, a in zip(boosts[1:], boosts, strict=False))  # never drains at the full rate
+
+
+@pytest.mark.parametrize("lat_accel, share", [(0.3, 1.), (0.5, 1.), (0.75, 0.5), (1.0, 0.)])
+def test_a_turn_shrinks_the_cap_in_proportion(lat_accel, share):
+  Params().put_bool("SetSpeedAssist", True)
+  ssa = SetSpeedAssist()
+  v = 40. * CV.MPH_TO_MS
+  assert run(ssa, 100, a_cruise=2.0, curvature=lat_accel / v ** 2) == pytest.approx(0.1 + MAX_BOOST[0] * share)
+
+
+def test_a_lead_leaving_mid_boost_does_not_step_the_accel_down():
+  Params().put_bool("SetSpeedAssist", True)
+  ssa = SetSpeedAssist()
+  run(ssa, 100, a_e2e=-0.12, a_cruise=2.0, a_ego=-0.2, lead=True)  # boost near the cap, a lead far ahead, the truck easing off
+  before = run(ssa, 1, a_e2e=-0.12, a_cruise=2.0, a_ego=-0.2, lead=True)
+  assert run(ssa, 1, a_e2e=-0.12, a_cruise=2.0, a_ego=-0.2) >= before  # the lead leaves: grace starts from where we were
 
 
 SLOWING = {"a_e2e": -0.8, "a_cruise": -0.5, "a_ego": -1.0}  # the model carries the truck's slowdown past the engage
@@ -75,5 +109,6 @@ def test_engage_grace_holds_a_slowdown_the_model_starts_after_the_engage():
 def test_grace_when_a_lead_we_braked_for_leaves(a_ego, v_mph, grace):
   ssa = engaged_ssa()
   run(ssa, 10, a_e2e=-0.9, a_cruise=2.0, a_ego=a_ego, v_mph=v_mph, lead=True)
-  out = run(ssa, 20, a_e2e=-0.6, a_cruise=2.0, a_ego=a_ego, v_mph=v_mph)  # the cruise ramp is far up: ramps from the truck's accel instead
-  assert out == (pytest.approx(a_ego + 20 * GRACE_JERK * DT_MDL) if grace else -0.6)  # below LEAD_MIN_SPEED or not braking: no grace
+  start = max(a_ego, -0.6 + ssa.boost)  # the truck's accel, or the model plus any boost we already had if higher
+  out = run(ssa, 20, a_e2e=-0.6, a_cruise=2.0, a_ego=a_ego, v_mph=v_mph)  # the cruise ramp is far up: ramps from there instead
+  assert out == (pytest.approx(start + 20 * GRACE_JERK * DT_MDL) if grace else -0.6)  # below LEAD_MIN_SPEED or not braking: no grace
