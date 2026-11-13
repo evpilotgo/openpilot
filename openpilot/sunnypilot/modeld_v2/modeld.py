@@ -29,6 +29,7 @@ from opendbc.car.car_helpers import get_demo_car_params
 from openpilot.common.swaglog import cloudlog
 from openpilot.common.params import Params
 from openpilot.common.hardware.usb import cable_connected
+from openpilot import jetlink_adapter
 from openpilot.common.filter_simple import FirstOrderFilter
 from openpilot.common.realtime import config_realtime_process, DT_MDL
 from openpilot.common.transformations.camera import DEVICE_CAMERAS
@@ -262,7 +263,10 @@ def main(demo=False):
   cloudlog.bind(daemon=PROCESS_NAME)
   setproctitle(PROCESS_NAME)
 
-  CHESTNUT = _find_driving_pkl(get_active_bundle(chestnut=True)) is not None and (chestnut_present() or cable_connected())
+  HOOKS = jetlink_adapter.hooks()
+  # a Jetlink host on the USB-C port looks like a chestnut to cable_connected(): count the cable only with the link off
+  CHESTNUT = _find_driving_pkl(get_active_bundle(chestnut=True)) is not None and \
+    (chestnut_present() or (cable_connected() and not jetlink_adapter.link_on()))
   if CHESTNUT:
     from tinygrad.runtime.ops_amd import AMDDevice
     AMDDevice.wait_timeout_ms = 3000
@@ -330,6 +334,10 @@ def main(demo=False):
   assert model is not None
   cloudlog.warning(f"models loaded in {time.monotonic() - st:.1f}s, modeld starting")
 
+  # Jetlink, before going realtime: the GPU thread it starts would inherit SCHED_FIFO 54 on core 7
+  if HOOKS.prepare(CHESTNUT):
+    # the joining model drives as small_model until the big model is ready
+    model = HOOKS.attach(model, small_model, vipc_client_main.width, vipc_client_main.height)
   config_realtime_process(7, 54)
 
   # messaging
@@ -439,6 +447,7 @@ def main(demo=False):
     run_count = run_count + 1
 
     frame_drop_ratio = frames_dropped / (1 + frames_dropped)
+    model.frame_drop_ratio = frame_drop_ratio  # Jetlink hands a lagging big model back on it
 
     bufs = {name: buf_extra if 'big' in name else buf_main for name in model.vision_input_names}
     transforms = {name: model_transform_extra if 'big' in name else model_transform_main for name in model.vision_input_names}
@@ -477,6 +486,8 @@ def main(demo=False):
       model_output = None
     mt2 = time.perf_counter()
     model_execution_time = mt2 - mt1
+    if HOOKS.handed_over(model):  # a swap or hand-back stalls a frame or two: restart the drop filter's warmup
+      run_count = 0
 
     if model_output is not None:
       modelv2_send = messaging.new_message('modelV2')
