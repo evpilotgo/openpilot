@@ -4,7 +4,7 @@ from pathlib import Path
 from jetlink.openpilot.testing import check_adapter, check_fallback, check_seam
 from openpilot import jetlink_adapter
 
-MODELD = Path(__file__).parents[1] / 'modeld.py'
+MODELDS = (Path(__file__).parents[1] / 'modeld.py', Path(__file__).parents[3] / 'sunnypilot' / 'modeld_v2' / 'modeld.py')
 HOOKS = ('should_run', 'status', 'reason', 'prepare', 'handed_over', 'state', 'shutdown_step', 'runtime', 'swap_events')
 
 
@@ -12,8 +12,8 @@ def test_the_adapter():
   assert check_adapter(jetlink_adapter, heavy=('openpilot.common.params', 'openpilot.common.swaglog', 'openpilot.cereal')) == []
 
 
-def test_the_modeld_seam():
-  assert check_seam(MODELD) == []
+def test_the_modeld_seams():  # stock modeld and modeld_tinygrad (a sunnypilot model) both run the hooks
+  assert [p for m in MODELDS for p in check_seam(m)] == []
 
 
 def test_the_fallback(tmp_path, monkeypatch):
