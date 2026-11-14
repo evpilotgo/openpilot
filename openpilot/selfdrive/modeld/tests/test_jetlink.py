@@ -16,6 +16,19 @@ def test_the_modeld_seams():  # stock modeld and modeld_tinygrad (a sunnypilot m
   assert [p for m in MODELDS for p in check_seam(m)] == []
 
 
+def test_every_modeld_always_passes_action_t():
+  """The Jetlink big model is comma's and reads inputs['action_t'] on every frame. modeld_tinygrad used to add it
+  only when the selected small model had one, so with GWM V9 (no action_t) every swap died with KeyError."""
+  import ast
+  for path in MODELDS:
+    tree = ast.parse(path.read_text())
+    main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main')
+    keys = [k.value for n in ast.walk(main) if isinstance(n, ast.AnnAssign | ast.Assign) and isinstance(n.value, ast.Dict)
+            and any(getattr(t, 'id', None) == 'inputs' for t in ([n.target] if isinstance(n, ast.AnnAssign) else n.targets))
+            for k in n.value.keys if isinstance(k, ast.Constant)]
+    assert 'action_t' in keys, path
+
+
 def test_the_fallback(tmp_path, monkeypatch):
   monkeypatch.setenv('PARAMS_ROOT', str(tmp_path))  # link_on() reads the setting from this test's own store
   assert check_fallback(jetlink_adapter._NoJetlink('jetlink is missing'), HOOKS, link_on=jetlink_adapter.link_on) == []
