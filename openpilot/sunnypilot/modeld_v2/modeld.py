@@ -457,16 +457,16 @@ def main(demo=False):
     lat_action_t = lat_delay + frame_delay + action_delay
     long_action_t = long_delay + frame_delay + action_delay
 
+    # action_t always: a Jetlink big model is comma's and needs it even when the selected small model has none
+    # (numpy_inputs is the small model's). ModelState.run copies only the inputs its own model has.
     inputs:dict[str, np.ndarray] = {
       model.desire_key: vec_desire,
       'traffic_convention': traffic_convention,
+      'action_t': np.array([lat_action_t, long_action_t], dtype=np.float32),
     }
 
     if 'lateral_control_params' in model.numpy_inputs:
       inputs['lateral_control_params'] = np.array([v_ego, lat_delay], dtype=np.float32)
-
-    if 'action_t' in model.numpy_inputs:
-      inputs['action_t'] = np.array([lat_action_t, long_action_t], dtype=np.float32)
 
     mt1 = time.perf_counter()
     try:
