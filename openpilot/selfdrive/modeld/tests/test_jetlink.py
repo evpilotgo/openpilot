@@ -29,6 +29,15 @@ def test_every_modeld_always_passes_action_t():
     assert 'action_t' in keys, path
 
 
+def test_the_ui_counts_a_jetlink_cable_as_no_chestnut():
+  """With Jetlink on, the cable in the USB-C port is the Jetlink host. The UI used to count it as a chestnut at the
+  start of a drive, then found none and drew the orange chestnut icon (route 2e5eeb7452e81e85/0000002a)."""
+  ui_state = Path(__file__).parents[2] / 'ui' / 'ui_state.py'
+  src = ui_state.read_text()
+  start = src.index('self.chestnut_present = self.sm["deviceState"].chestnutPresent')
+  assert 'jetlink_adapter.link_on()' in src[start:src.index('\n\n', start)]
+
+
 def test_the_fallback(tmp_path, monkeypatch):
   monkeypatch.setenv('PARAMS_ROOT', str(tmp_path))  # link_on() reads the setting from this test's own store
   assert check_fallback(jetlink_adapter._NoJetlink('jetlink is missing'), HOOKS, link_on=jetlink_adapter.link_on) == []
