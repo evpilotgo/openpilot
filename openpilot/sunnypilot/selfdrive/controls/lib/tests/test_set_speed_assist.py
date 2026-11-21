@@ -25,7 +25,7 @@ def test_ramps_to_the_personality_cap_under_cruise(on, personality):
   assert run(ssa, 100, a_cruise=0.35, personality=personality) == pytest.approx(0.35 if on else 0.1)  # never above the cruise ramp
 
 
-@pytest.mark.parametrize("kw, at_once", [({"a_e2e": -0.6}, True), ({"a_e2e": -0.5}, False), ({"should_stop": True}, True), ({"v_mph": 15.}, False),
+@pytest.mark.parametrize("kw, at_once", [({"a_e2e": -0.6}, True), ({"a_e2e": -0.5}, False), ({"should_stop": True}, True), ({"v_mph": 4.}, False),
                                          ({"a_cruise": -0.3}, False), ({"curvature": 0.01}, False), ({"enabled": False}, False)])
 def test_backs_off(kw, at_once):
   Params().put_bool("SetSpeedAssist", True)
@@ -34,6 +34,13 @@ def test_backs_off(kw, at_once):
   a_e2e = kw.get("a_e2e", 0.1)
   assert (run(ssa, 1, **kw) == pytest.approx(a_e2e)) == at_once
   assert run(ssa, 100, **kw) == pytest.approx(a_e2e)
+
+
+@pytest.mark.parametrize("v_mph, active", [(4., False), (6., True), (10., True), (19., True)])
+def test_works_down_to_5_mph(v_mph, active):
+  Params().put_bool("SetSpeedAssist", True)
+  ssa = SetSpeedAssist()
+  assert (run(ssa, 100, v_mph=v_mph) > 0.1 + 0.01) == active
 
 
 @pytest.mark.parametrize("a_e2e, share", [(0.1, 1.), (-0.1, 1.), (-0.2, 0.75), (-0.3, 0.5), (-0.4, 0.25)])
@@ -81,7 +88,7 @@ def engaged_ssa():
   return ssa
 
 
-@pytest.mark.parametrize("after", [{"a_e2e": -1.6}, {"should_stop": True}, {"v_mph": 15.}])
+@pytest.mark.parametrize("after", [{"a_e2e": -1.6}, {"should_stop": True}, {"v_mph": 4.}])
 def test_engage_grace_hands_back_at_once(after):
   ssa = engaged_ssa()
   assert run(ssa, 10, **SLOWING) == -0.5  # a ramp from the truck's accel up to the cruise ramp leads
@@ -105,10 +112,10 @@ def test_engage_grace_holds_a_slowdown_the_model_starts_after_the_engage():
   assert run(ssa, 10, a_e2e=-0.4, a_cruise=0.5, a_ego=-0.5) == pytest.approx(0.5)
 
 
-@pytest.mark.parametrize("a_ego, v_mph, grace", [(-1.0, 15., True), (-1.0, 8., False), (0., 15., False)])
+@pytest.mark.parametrize("a_ego, v_mph, grace", [(-1.0, 15., True), (-1.0, 8., True), (-1.0, 4., False), (0., 15., False)])
 def test_grace_when_a_lead_we_braked_for_leaves(a_ego, v_mph, grace):
   ssa = engaged_ssa()
-  run(ssa, 10, a_e2e=-0.9, a_cruise=2.0, a_ego=a_ego, v_mph=v_mph, lead=True)
+  run(ssa, int(GRACE / DT_MDL) + 10, a_e2e=-0.9, a_cruise=2.0, a_ego=a_ego, v_mph=v_mph, lead=True)  # past the engage grace
   start = max(a_ego, -0.6 + ssa.boost)  # the truck's accel, or the model plus any boost we already had if higher
   out = run(ssa, 20, a_e2e=-0.6, a_cruise=2.0, a_ego=a_ego, v_mph=v_mph)  # the cruise ramp is far up: ramps from there instead
   assert out == (pytest.approx(start + 20 * GRACE_JERK * DT_MDL) if grace else -0.6)  # below LEAD_MIN_SPEED or not braking: no grace

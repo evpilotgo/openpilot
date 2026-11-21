@@ -5,7 +5,7 @@ from openpilot.common.params import Params
 from openpilot.common.realtime import DT_MDL
 
 MAX_BOOST = (0.7, 0.5, 0.3)  # m/s^2 above the model, by driving personality: aggressive, standard, relaxed
-MIN_SPEED, LEAD_MIN_SPEED = 20 * CV.MPH_TO_MS, 10 * CV.MPH_TO_MS  # a braking lead can take us below MIN_SPEED, see below
+MIN_SPEED = LEAD_MIN_SPEED = 5 * CV.MPH_TO_MS  # also the floor for the grace after a lead we braked for leaves, see below
 LAT_ACCEL_FADE, MAX_LAT_ACCEL = 0.5, 1.0  # m/s^2, the cap shrinks to 0 through a turn, off above
 MODEL_SLOWING, MODEL_BRAKING = -0.1, -0.5  # m/s^2, the cap shrinks from full at a -0.1 model slow-down to 0 at -0.5, braking drops it at once
 RAMP_UP, RAMP_DOWN = 0.5, 1.5  # m/s^3
