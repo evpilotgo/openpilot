@@ -6,7 +6,7 @@ standard library only. Every hook answers as the link off when jetlink fails, so
 import functools
 import os
 
-API = 3              # the jetlink.openpilot API this adapter is written to
+API = 4              # the jetlink.openpilot API this adapter is written to
 OWNER = 'jetlinkd'   # manager's name for the gadget owner
 
 
