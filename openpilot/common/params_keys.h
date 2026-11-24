@@ -305,6 +305,13 @@ inline static std::unordered_map<std::string, ParamKeyAttributes> keys = {
     {"SmartCruiseControlVision", {PERSISTENT | BACKUP, BOOL, "0"}},
     {"SetSpeedAssist", {PERSISTENT | BACKUP, BOOL, "0"}},
 
+    // Custom Lead Sensitivity
+    {"CustomLeadSensitivity", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"CameraLeadConfidence", {PERSISTENT | BACKUP, INT, "50"}},
+    {"RadarLeadConfidence", {PERSISTENT | BACKUP, INT, "50"}},
+    {"SmoothLeadHandoffs", {PERSISTENT | BACKUP, BOOL, "0"}},
+    {"IgnoreStationaryRadarGhosts", {PERSISTENT | BACKUP, BOOL, "0"}},
+
     // Torque lateral control custom params
     {"CustomTorqueParams", {PERSISTENT | BACKUP , BOOL}},
     {"EnforceTorqueControl", {PERSISTENT | BACKUP, BOOL}},
